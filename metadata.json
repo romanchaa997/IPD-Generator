@@ -1,0 +1,5 @@
+{
+  "name": "Interactive Pitch Deck Generator",
+  "description": "A web application that generates and displays an interactive, slide-by-slide pitch deck for a Unified Technology Ecosystem. Users can navigate through the presentation, view detailed content for each slide, and read speaker notes, all rendered with a modern, data-driven design.",
+  "requestFramePermissions": []
+}
