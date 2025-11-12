@@ -1,306 +1,451 @@
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { GoogleGenAI, Type } from "@google/genai";
+import { Routes, Route, useParams, useNavigate, Navigate } from 'react-router-dom';
+
 import Sidebar from './components/Sidebar';
 import Slide from './components/Slide';
+import { WandSparklesIcon, VideoCameraIcon, DocumentPlusIcon, ArrowPathIcon } from './components/icons/HeroIcons';
+import { PITCH_DECK_DATA } from './data/pitchDeckData';
+import type { SlideData } from './types';
+
+import AIPromptModal from './components/AIPromptModal';
+import SlideReviewModal from './components/SlideReviewModal';
+import VideoConfigModal from './components/VideoConfigModal';
 import LoadingModal from './components/LoadingModal';
 import VideoPlayerModal from './components/VideoPlayerModal';
-import VideoConfigModal from './components/VideoConfigModal';
-import { PITCH_DECK_DATA } from './data/pitchDeckData';
-import { FilmIcon, DocumentPlusIcon } from './components/icons/HeroIcons';
-import { GoogleGenAI } from '@google/genai';
-import { SlideData } from './types';
 
-function App() {
-  const [slidesData, setSlidesData] = useState<SlideData[]>(PITCH_DECK_DATA);
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState('');
-  const [progress, setProgress] = useState(0);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [apiKeySelected, setApiKeySelected] = useState(false);
 
-  useEffect(() => {
-    const checkApiKey = async () => {
-      if (window.aistudio && (await window.aistudio.hasSelectedApiKey())) {
-        setApiKeySelected(true);
-      }
+const LOCAL_STORAGE_KEY = 'pitchDeckData';
+
+const DeckView: React.FC = () => {
+    const navigate = useNavigate();
+    const { slideIndex } = useParams();
+    const currentSlideIndex = slideIndex ? parseInt(slideIndex, 10) - 1 : 0;
+
+    const getInitialSlides = (): SlideData[] => {
+        try {
+            const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedData) {
+                const parsedData = JSON.parse(savedData);
+                // Basic validation
+                if (Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0].id) {
+                    return parsedData;
+                }
+            }
+        } catch (error) {
+            console.error("Failed to parse slides from localStorage", error);
+        }
+        return PITCH_DECK_DATA;
     };
-    checkApiKey();
-  }, []);
 
-  const slideTitles = useMemo(() => slidesData.map((s, index) => ({ id: index, title: s.title, fullTitle: s.title })), [slidesData]);
+    const [slidesData, setSlidesData] = useState<SlideData[]>(getInitialSlides);
+    const [isApiKeySelected, setIsApiKeySelected] = useState(false);
 
-  const generateThumbnail = (videoSrc: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
-      video.src = videoSrc;
+    // Modal States
+    const [isAIPromptOpen, setIsAIPromptOpen] = useState(false);
+    const [isReviewingSlides, setIsReviewingSlides] = useState(false);
+    const [generatedSlides, setGeneratedSlides] = useState<SlideData[]>([]);
+    const [isVideoConfigOpen, setIsVideoConfigOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingStatus, setLoadingStatus] = useState('');
+    const [progress, setProgress] = useState(0);
+    const [videoUrl, setVideoUrl] = useState<string | null>(null);
+    const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
 
-      video.onloadeddata = () => {
-        video.currentTime = 1; // Seek to 1 second
-      };
+    const aiRef = useRef<GoogleGenAI | null>(null);
 
-      video.onseeked = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          return reject(new Error('Could not get canvas context'));
+    useEffect(() => {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slidesData));
+        } catch (error) {
+            console.error("Failed to save slides to localStorage", error);
         }
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg'));
-      };
-
-      video.onerror = (e) => {
-        reject(new Error('Failed to load video for thumbnail generation'));
-      };
-    });
-  };
-
-
-  const handleGenerateVideo = async (config: { aspectRatio: '16:9' | '9:16'; resolution: '720p' | '1080p'; customTitle: string }) => {
-    setIsConfigOpen(false);
-
-    if (!apiKeySelected) {
-      if (window.aistudio) {
-        await window.aistudio.openSelectKey();
-        setApiKeySelected(true); // Assume success to avoid race condition
-      } else {
-        alert("API Key selection is not available.");
-        return;
-      }
-    }
-
-    setIsLoading(true);
-    setProgress(0);
-    setLoadingStatus('Initializing video generation...');
-
-    let operation: any;
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-      const prompt = `Generate a dynamic and engaging video pitch with the title "${config.customTitle}". 
-      The video should be professional, targeting investors. 
-      Use the speaker notes as a script for a voiceover.
-      The tone should be confident and visionary.
-      Animate the visual elements described for each slide.
-      ---
-      ${slidesData.map(slide => `
-      Slide ${slide.id}: ${slide.title}
-      Content: ${JSON.stringify(slide.content)}
-      Speaker Notes: ${slide.speakerNotes}
-      `).join('\n---\n')}
-      `;
-      
-      setProgress(10);
-      setLoadingStatus('Sending request to Gemini...');
-      operation = await ai.models.generateVideos({
-        model: 'veo-3.1-fast-generate-preview',
-        prompt: prompt,
-        config: {
-          numberOfVideos: 1,
-          resolution: config.resolution,
-          aspectRatio: config.aspectRatio,
+    }, [slidesData]);
+    
+    useEffect(() => {
+        // Ensure slideIndex is valid, redirect if not
+        if (currentSlideIndex < 0 || currentSlideIndex >= slidesData.length) {
+            navigate('/slide/1', { replace: true });
         }
-      });
-      
-      setProgress(25);
-      setLoadingStatus('Processing video... this may take several minutes.');
-      while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000));
-        operation = await ai.operations.getVideosOperation({ operation: operation });
-      }
+    }, [currentSlideIndex, slidesData.length, navigate]);
 
-      if (operation.error) {
-        throw new Error(operation.error.message);
-      }
-      
-      setProgress(75);
-      setLoadingStatus('Finalizing video...');
-      const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-      if (downloadLink) {
-        const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch video file. Status: ${response.status}`);
+    const checkApiKey = useCallback(async () => {
+        if (window.aistudio && await window.aistudio.hasSelectedApiKey()) {
+            setIsApiKeySelected(true);
+            return true;
         }
-        const videoBlob = await response.blob();
-        const objectUrl = URL.createObjectURL(videoBlob);
-        
-        setProgress(90);
-        setLoadingStatus('Generating thumbnail...');
-        const thumbUrl = await generateThumbnail(objectUrl).catch(err => {
-            console.warn("Could not generate thumbnail:", err);
-            return null;
-        });
-        
-        setProgress(100);
-        setThumbnailUrl(thumbUrl);
-        setVideoUrl(objectUrl);
-      } else {
-        throw new Error('Video generation failed to produce a download link.');
-      }
-    } catch (error: any) {
-      console.error('Video generation failed:', error);
-      let userMessage = `An unexpected error occurred: ${error.message}`;
-      const errorMessage = error.message?.toLowerCase() || '';
+        return false;
+    }, []);
 
-      if (errorMessage.includes("api key not valid") || errorMessage.includes("api_key_invalid") || errorMessage.includes("requested entity was not found")) {
-        userMessage = "Your API key seems to be invalid or missing. Please select a valid API key and try again.";
-        setApiKeySelected(false);
-      } else if (errorMessage.includes("billing") || errorMessage.includes("permission_denied")) {
-        userMessage = "Video generation failed. Please ensure that billing is enabled for your project. You can find more information at ai.google.dev/gemini-api/docs/billing.";
-      } else if (errorMessage.includes("quota") || errorMessage.includes("resource exhausted")) {
-        userMessage = "You have exceeded your API quota. Please check your usage limits or try again later.";
-      } else if (errorMessage.includes("failed to fetch")) {
-        userMessage = "A network error occurred. Please check your internet connection and try again.";
-      } else if (operation?.error) {
-        userMessage = `The video generation service returned an error: ${operation.error.message}`;
-      }
-      
-      alert(userMessage);
-
-    } finally {
-      setIsLoading(false);
-      setLoadingStatus('');
-      setProgress(0);
-    }
-  };
-
-  const handleGenerateSpeakerNotes = async (slideIndex: number) => {
-    if (!apiKeySelected) {
+    useEffect(() => {
+        checkApiKey();
+    }, [checkApiKey]);
+    
+    const initializeAi = () => {
+        if (process.env.API_KEY) {
+            aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        } else {
+            console.error("API Key is missing.");
+            setIsApiKeySelected(false);
+        }
+    };
+    
+    const handleSelectKey = async () => {
         if (window.aistudio) {
             await window.aistudio.openSelectKey();
-            setApiKeySelected(true);
-        } else {
-            alert("API Key selection is not available.");
+            setIsApiKeySelected(true);
+        }
+    };
+
+    const handleGenerateSlidesWithAI = async (prompt: string) => {
+        setIsAIPromptOpen(false);
+        setIsLoading(true);
+        setLoadingStatus('Initializing AI model...');
+        setProgress(10);
+        
+        initializeAi();
+        if (!aiRef.current) {
+            alert("AI Client not initialized. Please ensure your API key is set.");
+            setIsLoading(false);
             return;
         }
-    }
-
-    const slideToUpdate = slidesData[slideIndex];
-    if (!slideToUpdate) return;
     
-    // Set an initial "generating" state for the specific slide
-    setSlidesData(currentSlides =>
-      currentSlides.map((slide, index) =>
-        index === slideIndex ? { ...slide, speakerNotes: 'Generating with AI...' } : slide
-      )
-    );
-
-    try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const prompt = `You are an expert pitch deck consultant. Based on the following slide content, write professional and engaging speaker notes for a presentation to investors. The notes should be concise, impactful, and explain the key takeaways of the slide.
-        ---
-        Slide Title: ${slideToUpdate.title}
-        Slide Content: ${JSON.stringify(slideToUpdate.content)}
-        ---
-        Speaker Notes:`;
-
-        const responseStream = await ai.models.generateContentStream({
-            model: "gemini-2.5-pro",
-            contents: prompt,
-        });
-
-        // Clear notes for streaming
-        setSlidesData(currentSlides =>
-            currentSlides.map((slide, index) =>
-                index === slideIndex ? { ...slide, speakerNotes: '' } : slide
-            )
-        );
-
-        for await (const chunk of responseStream) {
-            const chunkText = chunk.text;
-            setSlidesData(currentSlides =>
-                currentSlides.map((slide, index) =>
-                    index === slideIndex
-                        ? { ...slide, speakerNotes: slide.speakerNotes + chunkText }
-                        : slide
-                )
-            );
+        setLoadingStatus('Generating presentation content...');
+        setProgress(30);
+    
+        const fullPrompt = `Based on the following idea, generate a JSON array for a 5-slide pitch deck: "${prompt}". 
+          Each object in the array should represent a slide and strictly follow this TypeScript interface:
+          \`\`\`
+          interface SlideData {
+            id: number;
+            title: string;
+            layout: 'Title' | 'Table with icons' | 'Large numbers with icons' | 'Three columns with icons' | 'Hexagon diagram with 6 modules' | 'Default';
+            content: any;
+            speakerNotes: string;
+            visualElements: string[];
+          }
+          \`\`\`
+          The 'id' should be a unique number. The 'visualElements' array should be empty to start.
+          Ensure the generated JSON is valid and can be parsed directly. The 'content' object should be structured appropriately for the chosen 'layout'. For a 'Title' layout, 'content' must have 'mainTitle', 'subtitle', etc.`;
+    
+        try {
+            const response = await aiRef.current.models.generateContent({
+                model: 'gemini-2.5-pro',
+                contents: fullPrompt,
+                config: {
+                    responseMimeType: 'application/json',
+                }
+            });
+    
+            setLoadingStatus('Parsing AI response...');
+            setProgress(80);
+            
+            const generatedJson = JSON.parse(response.text);
+            
+            // Validate and assign unique IDs
+            const newSlides = generatedJson.map((slide: Omit<SlideData, 'id'>, index: number) => ({
+                ...slide,
+                id: Date.now() + index, // Ensure unique ID
+                visualElements: slide.visualElements || [], // Ensure array exists
+            }));
+            
+            setGeneratedSlides(newSlides);
+            setIsReviewingSlides(true);
+        } catch (error) {
+            console.error("Error generating slides:", error);
+            alert("Failed to generate slides. The AI may have returned an invalid format. Please check the console for details.");
+        } finally {
+            setIsLoading(false);
+            setProgress(100);
         }
-    } catch (error: any) {
-        console.error("Failed to generate speaker notes:", error);
-        alert(`Error generating speaker notes: ${error.message}`);
-        // Revert to original notes on error
-        setSlidesData(currentSlides =>
-            currentSlides.map((slide, index) =>
-                index === slideIndex ? { ...slide, speakerNotes: slideToUpdate.speakerNotes } : slide
-            )
-        );
-    }
-  };
+      };
 
-  const handleSelectApiKey = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setApiKeySelected(true);
-    }
-  }
-
-  const handleAddNewSlide = () => {
-    const newSlideId = slidesData.length > 0 ? Math.max(...slidesData.map(s => s.id)) + 1 : 1;
-    const newSlide: SlideData = {
-      id: newSlideId,
-      title: 'Untitled Slide',
-      layout: 'Default',
-      content: { message: 'This is a new slide. Add your content here.' },
-      visualElements: [],
-      speakerNotes: 'Start writing your speaker notes for this new slide.',
+    const handleAcceptSlides = (finalSlides: SlideData[]) => {
+        const newSlides = [...slidesData, ...finalSlides];
+        setSlidesData(newSlides);
+        setIsReviewingSlides(false);
+        setGeneratedSlides([]);
+        navigate(`/slide/${slidesData.length + 1}`);
     };
-    const newSlidesData = [...slidesData, newSlide];
-    setSlidesData(newSlidesData);
-    setCurrentSlideIndex(newSlidesData.length - 1);
-  };
 
-  return (
-    <div className="bg-gray-900 text-white min-h-screen flex font-sans">
-      <Sidebar slides={slideTitles} currentSlideIndex={currentSlideIndex} onSelectSlide={setCurrentSlideIndex} />
-      <main className="flex-1 md:pl-64 p-4 md:p-8 flex flex-col items-center">
-        <div className="w-full flex justify-end mb-4 space-x-4">
-          <button
-              onClick={handleAddNewSlide}
-              className="bg-gray-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-600 transition-colors flex items-center space-x-2"
-            >
-              <DocumentPlusIcon className="h-5 w-5" />
-              <span>Add New Slide</span>
-          </button>
-          <button
-            onClick={() => {
-              if (apiKeySelected) {
-                setIsConfigOpen(true);
-              } else {
-                handleSelectApiKey();
-              }
-            }}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-2 px-6 rounded-lg hover:opacity-90 transition-opacity flex items-center space-x-2"
-          >
-            <FilmIcon className="h-5 w-5" />
-            <span>{apiKeySelected ? 'Generate Video' : 'Select API Key'}</span>
-          </button>
+    const handleDiscardSlides = () => {
+        setIsReviewingSlides(false);
+        setGeneratedSlides([]);
+    };
+    
+    const generateThumbnail = (videoFileUrl: string): Promise<string> => {
+        return new Promise((resolve) => {
+            const video = document.createElement('video');
+            video.src = videoFileUrl;
+            video.crossOrigin = "anonymous"; // Important for canvas
+            video.onloadeddata = () => {
+                video.currentTime = 1; // Seek to 1 second
+            };
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg'));
+                } else {
+                    resolve('');
+                }
+            };
+            video.onerror = () => {
+                resolve(''); // Resolve with empty on error
+            };
+        });
+    };
+
+    const handleGenerateVideo = async (config: {
+        aspectRatio: '16:9' | '9:16';
+        resolution: '720p' | '1080p';
+        customTitle: string;
+        logoBase64: string | null;
+        primaryColor: string;
+        accentColor: string;
+    }) => {
+        if (!await checkApiKey()) {
+            handleSelectKey();
+            return;
+        }
+        
+        setIsVideoConfigOpen(false);
+        setIsLoading(true);
+
+        let brandingInstructions = '';
+        if (config.logoBase64) {
+            brandingInstructions += `
+              - Incorporate the following brand logo as a subtle watermark in the bottom-right corner of the video. The logo is provided as a Base64 encoded string: "${config.logoBase64}".
+            `;
+        }
+        brandingInstructions += `
+          - Use these brand colors for on-screen text, graphics, and highlights. Primary Color: ${config.primaryColor}, Accent Color: ${config.accentColor}.
+        `;
+
+        const videoPrompt = `
+          Create a dynamic, professional, and engaging video pitch based on the following presentation slides.
+          Video Title: "${config.customTitle}"
+          The video should be a summary of the key points from the deck.
+          ---
+          DECK CONTENT:
+          ${slidesData.map(s => `Slide ${s.id} (${s.title}):\n${JSON.stringify(s.content)}\nSpeaker Notes: ${s.speakerNotes}`).join('\n\n')}
+          ---
+          Instructions:
+          - Use a confident, professional voiceover.
+          - Use dynamic transitions and on-screen text overlays to highlight key data and concepts.
+          - Generate relevant, abstract background visuals that match the tech-focused theme.
+          ${brandingInstructions}
+        `;
+        let operation: any = null;
+        try {
+          setLoadingStatus("Initializing video generation...");
+          setProgress(0);
+    
+          initializeAi();
+          if (!aiRef.current) {
+            throw new Error("AI client not initialized.");
+          }
+          
+          setLoadingStatus("Sending request to VEO model...");
+          setProgress(10);
+          operation = await aiRef.current.models.generateVideos({
+            model: 'veo-3.1-fast-generate-preview',
+            prompt: videoPrompt,
+            config: {
+              numberOfVideos: 1,
+              resolution: config.resolution,
+              aspectRatio: config.aspectRatio,
+            }
+          });
+          
+          setLoadingStatus("Video is processing in the background...");
+          setProgress(25);
+    
+          while (!operation.done) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            setProgress(p => Math.min(p + 10, 80));
+            operation = await aiRef.current.operations.getVideosOperation({ operation });
+          }
+          
+          setLoadingStatus("Finalizing and fetching video...");
+          setProgress(90);
+    
+          const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+          if (downloadLink && process.env.API_KEY) {
+            const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+            const videoBlob = await videoResponse.blob();
+            const newVideoUrl = URL.createObjectURL(videoBlob);
+            setVideoUrl(newVideoUrl);
+            
+            setLoadingStatus("Generating video thumbnail...");
+            setProgress(95);
+            const thumbUrl = await generateThumbnail(newVideoUrl);
+            setThumbnailUrl(thumbUrl);
+
+          } else {
+            throw new Error("Video generation completed, but no download link was found or API key is missing.");
+          }
+          
+          setProgress(100);
+        } catch (error: any) {
+          console.error("Error generating video:", error);
+          let errorMessage = "An unknown error occurred during video generation.";
+           if (error.message?.includes("API_KEY_INVALID") || operation?.error?.message?.includes("API_KEY_INVALID")) {
+            errorMessage = "Your API Key is invalid. Please select a valid key and try again.";
+            setIsApiKeySelected(false);
+          } else if (error.message?.includes("PERMISSION_DENIED") || operation?.error?.message?.includes("PERMISSION_DENIED")) {
+            errorMessage = "Permission denied. Please ensure your API key has the 'Generative Language API' enabled and billing is active.";
+             setIsApiKeySelected(false);
+          } else if (error.message?.includes("RESOURCE_EXHAUSTED") || operation?.error?.message?.includes("RESOURCE_EXHAUSTED")) {
+            errorMessage = "You have exceeded your API quota. Please check your usage limits or upgrade your plan.";
+          } else if (error.message?.includes("Failed to fetch")) {
+            errorMessage = "A network error occurred. Please check your connection and try again.";
+          }
+          alert(errorMessage);
+        } finally {
+          setIsLoading(false);
+        }
+    };
+    
+    const handleAddNewSlide = () => {
+        const newSlide: SlideData = {
+            id: Date.now(),
+            title: 'New Slide',
+            layout: 'Default',
+            content: { title: 'New Slide Title', text: 'Start adding your content here.' },
+            visualElements: [],
+            speakerNotes: 'Add your speaker notes for this new slide.'
+        };
+        const newSlides = [...slidesData, newSlide];
+        setSlidesData(newSlides);
+        navigate(`/slide/${newSlides.length}`);
+    };
+    
+    const handleResetDeck = () => {
+        if (window.confirm("Are you sure you want to reset the deck? All your changes will be lost.")) {
+            setSlidesData(PITCH_DECK_DATA);
+            navigate('/slide/1');
+        }
+    };
+    
+    const handleUpdateSlideData = (updatedSlide: SlideData) => {
+        setSlidesData(prevSlides => {
+            const slideIndexToUpdate = prevSlides.findIndex(s => s.id === updatedSlide.id);
+            if (slideIndexToUpdate === -1) return prevSlides;
+            const newSlides = [...prevSlides];
+            newSlides[slideIndexToUpdate] = updatedSlide;
+            return newSlides;
+        });
+    };
+    
+    const handleGenerateSpeakerNotes = async (slideId: number, slideContent: string) => {
+        initializeAi();
+        if (!aiRef.current) {
+            alert("AI Client not initialized.");
+            return;
+        }
+
+        const prompt = `Based on the following slide content, generate concise and professional speaker notes for a pitch deck presentation. The notes should elaborate on the key points without being verbose.\n\nSlide Content:\n${slideContent}`;
+        
+        try {
+            const response = await aiRef.current.models.generateContentStream({
+                model: 'gemini-2.5-pro',
+                contents: prompt,
+            });
+
+            let currentNotes = "";
+            // Clear existing notes for the target slide
+            setSlidesData(prev => prev.map(s => s.id === slideId ? { ...s, speakerNotes: "" } : s));
+
+            for await (const chunk of response) {
+                currentNotes += chunk.text;
+                // Stream updates to the specific slide's speaker notes
+                setSlidesData(prev => prev.map(s => s.id === slideId ? { ...s, speakerNotes: currentNotes } : s));
+            }
+        } catch (error) {
+            console.error("Error generating speaker notes:", error);
+            alert("Failed to generate speaker notes. Please check the console.");
+            // Optional: Revert to original notes on error
+        }
+    };
+
+    return (
+        <div className="bg-gray-900 text-white min-h-screen flex">
+          <Sidebar
+            slides={slidesData}
+            currentSlideIndex={currentSlideIndex}
+            onSelectSlide={(index) => navigate(`/slide/${index + 1}`)}
+          />
+          <main className="flex-1 md:pl-64 flex flex-col items-center justify-center p-4 md:p-8">
+            <div className="w-full max-w-5xl">
+                {slidesData[currentSlideIndex] && (
+                    <Slide 
+                        key={slidesData[currentSlideIndex].id} // Add key for re-rendering on edit
+                        slideData={slidesData[currentSlideIndex]} 
+                        slideNumber={currentSlideIndex + 1}
+                        onGenerateNotes={handleGenerateSpeakerNotes}
+                        onUpdateSlide={handleUpdateSlideData}
+                    />
+                )}
+            </div>
+             <div className="mt-8 flex items-center justify-center space-x-2 md:space-x-4 flex-wrap gap-y-2">
+                <button 
+                  onClick={() => setIsAIPromptOpen(true)}
+                  className="flex items-center space-x-2 bg-purple-600 text-white px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm font-bold hover:bg-purple-700 transition-colors"
+                  title="Generate new slides using AI"
+                >
+                  <WandSparklesIcon className="h-5 w-5" />
+                  <span>Create with AI</span>
+                </button>
+                 <button
+                  onClick={handleAddNewSlide}
+                  className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm font-bold hover:bg-gray-500 transition-colors"
+                  title="Add a new blank slide"
+                >
+                  <DocumentPlusIcon className="h-5 w-5" />
+                  <span>Add New Slide</span>
+                </button>
+                 <button
+                  onClick={() => setIsVideoConfigOpen(true)}
+                  className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm font-bold hover:opacity-90 transition-opacity"
+                  title="Generate a video summary of the deck"
+                >
+                  <VideoCameraIcon className="h-5 w-5" />
+                  <span>Generate Video</span>
+                </button>
+                 <button
+                  onClick={handleResetDeck}
+                  className="flex items-center space-x-2 bg-red-800 text-white px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"
+                  title="Reset deck to original template"
+                >
+                  <ArrowPathIcon className="h-5 w-5" />
+                  <span>Reset Deck</span>
+                </button>
+            </div>
+          </main>
+    
+          {/* Modals */}
+          {isAIPromptOpen && <AIPromptModal onClose={() => setIsAIPromptOpen(false)} onGenerate={handleGenerateSlidesWithAI} />}
+          {isReviewingSlides && <SlideReviewModal slides={generatedSlides} onAccept={handleAcceptSlides} onDiscard={handleDiscardSlides} aiRef={aiRef} />}
+          {isVideoConfigOpen && <VideoConfigModal onClose={() => setIsVideoConfigOpen(false)} onGenerate={handleGenerateVideo} />}
+          {isLoading && <LoadingModal status={loadingStatus} progress={progress} />}
+          {videoUrl && <VideoPlayerModal videoUrl={videoUrl} thumbnailUrl={thumbnailUrl} onClose={() => setVideoUrl(null)} />}
         </div>
-        <Slide 
-          slideData={slidesData[currentSlideIndex]} 
-          slideNumber={currentSlideIndex + 1}
-          onGenerateNotes={() => handleGenerateSpeakerNotes(currentSlideIndex)}
-        />
-      </main>
-      {isConfigOpen && <VideoConfigModal onClose={() => setIsConfigOpen(false)} onGenerate={handleGenerateVideo} />}
-      {isLoading && <LoadingModal status={loadingStatus} progress={progress} />}
-      {videoUrl && <VideoPlayerModal 
-        videoUrl={videoUrl} 
-        thumbnailUrl={thumbnailUrl}
-        onClose={() => {
-          URL.revokeObjectURL(videoUrl);
-          if (thumbnailUrl) URL.revokeObjectURL(thumbnailUrl);
-          setVideoUrl(null);
-          setThumbnailUrl(null);
-        }} 
-      />}
-    </div>
-  );
-}
+      );
+};
+
+
+const App: React.FC = () => {
+    return (
+        <Routes>
+            <Route path="/slide/:slideIndex" element={<DeckView />} />
+            <Route path="/" element={<Navigate to="/slide/1" replace />} />
+        </Routes>
+    );
+};
 
 export default App;

@@ -1,124 +1,96 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { SlideData, TitleContent, TableContent, MarketContent } from '../types';
-import { LockClosedIcon, CpuChipIcon, CubeTransparentIcon, SparklesIcon } from './icons/HeroIcons';
 
 interface SlideProps {
   slideData: SlideData;
   slideNumber: number;
-  onGenerateNotes: () => void;
+  onGenerateNotes?: (slideId: number, slideContent: string) => void; // Optional for preview
 }
 
-const Slide: React.FC<SlideProps> = ({ slideData, slideNumber, onGenerateNotes }) => {
-  const { title, layout, content, speakerNotes } = slideData;
-  const [isGenerating, setIsGenerating] = useState(false);
+const TitleLayout: React.FC<{ content: TitleContent }> = ({ content }) => (
+  <div className="flex flex-col items-center justify-center h-full text-center text-white p-8">
+    <h1 className="text-5xl md:text-7xl font-bold font-poppins bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">{content.mainTitle}</h1>
+    <h2 className="mt-4 text-2xl md:text-3xl text-gray-300">{content.subtitle}</h2>
+    <p className="mt-6 text-lg text-purple-300 tracking-widest">{content.tagline}</p>
+    <div className="absolute bottom-8 text-sm text-gray-500">{content.footer}</div>
+  </div>
+);
 
-  const handleGenerateClick = async () => {
-    setIsGenerating(true);
-    try {
-      await onGenerateNotes();
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const renderContent = () => {
-    switch (layout) {
-      case 'Title':
-        const titleContent = content as TitleContent;
-        return (
-          <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-purple-gradient rounded-xl shadow-2xl relative overflow-hidden">
-             <div className="absolute inset-0 opacity-10">
-                <LockClosedIcon className="absolute h-24 w-24 top-1/4 left-1/4 transform -translate-x-1/2 -translate-y-1/2 rotate-12" />
-                <CpuChipIcon className="absolute h-32 w-32 bottom-1/4 right-1/4 transform translate-x-1/2 translate-y-1/2 -rotate-12" />
-                <CubeTransparentIcon className="absolute h-20 w-20 top-1/2 right-1/3 transform -translate-x-1/2 -translate-y-1/2" />
-            </div>
-            <div className="relative z-10">
-                <h1 className="text-5xl md:text-7xl font-bold font-montserrat text-white">{titleContent.mainTitle}</h1>
-                <p className="mt-4 text-xl md:text-2xl text-purple-200">{titleContent.subtitle}</p>
-                <p className="mt-8 text-sm md:text-base font-semibold tracking-widest text-white uppercase">{titleContent.tagline}</p>
-            </div>
-          </div>
-        );
-
-      case 'Table with icons':
-        const tableContent = content as TableContent;
-        return (
-            <div className="w-full max-w-5xl p-6 bg-gray-800 rounded-lg">
-                <h2 className="text-3xl font-bold mb-6 text-center font-poppins"><span className="mr-3">🌊</span>{tableContent.title}</h2>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left table-auto">
-                        <thead>
-                            <tr className="border-b-2 border-gray-600">
-                                {tableContent.table.headers.map((header, i) => <th key={i} className="p-4 uppercase text-sm text-gray-400">{header}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {tableContent.table.rows.map((row, i) => (
-                                <tr key={i} className="border-b border-gray-700">
-                                    <td className="p-4 flex items-center gap-2 font-semibold"><span>{row.icon}</span> {row.regulation}</td>
-                                    <td className="p-4 text-gray-300">{row.impact}</td>
-                                    <td className={`p-4 font-bold ${row.highlight ? 'text-pink-400' : 'text-gray-300'}`}>{row.deadline}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        );
-      
-      case 'Large numbers with icons':
-        const marketContent = content as MarketContent;
-        return (
-             <div className="w-full max-w-5xl p-6 bg-gray-800 rounded-lg">
-                <h2 className="text-3xl font-bold mb-8 text-center font-poppins"><span className="mr-3">💰</span>{marketContent.title}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-                    {marketContent.grid.map((item, i) => (
-                        <div key={i} className="bg-gray-700 p-6 rounded-lg">
-                            <p className="text-sm text-gray-400 uppercase">{item.category}</p>
-                            <p className="text-4xl font-bold my-2 brand-text-gradient">{item.value}</p>
-                            <p className="font-semibold text-green-400">{item.cagr} CAGR</p>
-                        </div>
+const TableLayout: React.FC<{ content: TableContent }> = ({ content }) => (
+  <div className="p-8 md:p-12 text-white h-full flex flex-col">
+    <h2 className="text-3xl md:text-4xl font-bold font-poppins mb-8">{content.title}</h2>
+    <div className="overflow-x-auto">
+        <table className="w-full text-left">
+            <thead>
+                <tr className="border-b border-gray-600">
+                    <th className="p-4 text-sm font-semibold uppercase text-gray-400"></th>
+                    {content.table.headers.map((header, index) => (
+                        <th key={index} className="p-4 text-sm font-semibold uppercase text-gray-400">{header}</th>
                     ))}
-                </div>
-             </div>
-        )
+                </tr>
+            </thead>
+            <tbody>
+                {content.table.rows.map((row, rowIndex) => (
+                    <tr key={rowIndex} className={`border-b border-gray-700 ${row.highlight ? 'bg-purple-900/30' : ''}`}>
+                        <td className="p-4 text-2xl">{row.icon}</td>
+                        <td className="p-4">{row.regulation}</td>
+                        <td className="p-4">{row.impact}</td>
+                        <td className={`p-4 font-bold ${row.highlight ? 'text-red-400' : ''}`}>{row.deadline}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+  </div>
+);
 
-      default:
-        return (
-          <div className="w-full max-w-4xl p-8 bg-gray-800 rounded-lg">
-            <h2 className="text-3xl font-bold mb-4 font-poppins">{title}</h2>
-            <pre className="whitespace-pre-wrap text-gray-300">{JSON.stringify(content, null, 2)}</pre>
+const MarketLayout: React.FC<{ content: MarketContent }> = ({ content }) => (
+    <div className="p-8 md:p-12 text-white h-full flex flex-col">
+      <h2 className="text-3xl md:text-4xl font-bold font-poppins mb-8 text-center">{content.title}</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 flex-grow">
+        {content.grid.map((item, index) => (
+          <div key={index} className="bg-gray-800 p-6 rounded-lg text-center flex flex-col justify-center items-center border border-gray-700">
+            <p className="text-lg text-gray-400">{item.category}</p>
+            <p className="text-4xl font-bold text-purple-400 my-2">{item.value}</p>
+            <p className="text-md text-green-400">CAGR {item.cagr}</p>
           </div>
-        );
+        ))}
+      </div>
+    </div>
+);
+
+const DefaultLayout: React.FC<{ content: any, title: string }> = ({ content, title }) => (
+    <div className="p-8 md:p-12 text-white h-full flex flex-col items-center justify-center">
+        <h2 className="text-3xl md:text-4xl font-bold font-poppins mb-4">{title}</h2>
+        <p className="text-gray-400">Layout not implemented yet.</p>
+        <pre className="mt-4 text-xs bg-gray-900 p-4 rounded-md w-full overflow-auto">
+            {JSON.stringify(content, null, 2)}
+        </pre>
+    </div>
+);
+
+const Slide: React.FC<SlideProps> = ({ slideData, slideNumber }) => {
+  const renderLayout = () => {
+    switch (slideData.layout) {
+      case 'Title':
+        return <TitleLayout content={slideData.content} />;
+      case 'Table with icons':
+        return <TableLayout content={slideData.content} />;
+      case 'Large numbers with icons':
+        return <MarketLayout content={slideData.content} />;
+      case 'Three columns with icons':
+      case 'Hexagon diagram with 6 modules':
+      default:
+        return <DefaultLayout title={slideData.content.title || slideData.title} content={slideData.content} />;
     }
   };
 
   return (
-    <div className="w-full flex flex-col gap-6 h-full">
-        <div className="flex-grow aspect-[16/9] w-full max-w-6xl mx-auto bg-gray-900 rounded-xl shadow-lg flex flex-col items-center justify-center p-2">
-            {renderContent()}
-        </div>
-        <div className="w-full max-w-6xl mx-auto bg-gray-800 p-4 rounded-lg shadow-md">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-bold text-sm uppercase text-purple-400">Speaker Notes</h3>
-              <button
-                onClick={handleGenerateClick}
-                disabled={isGenerating}
-                className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 disabled:cursor-not-allowed text-white text-xs font-semibold py-1 px-3 rounded-full transition-colors"
-              >
-                {isGenerating ? (
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                ) : (
-                    <SparklesIcon className="h-4 w-4" />
-                )}
-                <span>{isGenerating ? 'Generating...' : 'Generate with AI'}</span>
-              </button>
-            </div>
-            <p className="text-gray-300 text-sm md:text-base min-h-[40px]">{speakerNotes}</p>
-        </div>
+    <div className="w-full aspect-video bg-gray-900 rounded-lg shadow-2xl relative overflow-hidden border border-gray-700">
+      {renderLayout()}
+      <div className="absolute bottom-4 right-6 text-sm font-bold text-gray-600">
+        {slideNumber}
+      </div>
     </div>
   );
 };

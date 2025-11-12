@@ -1,18 +1,41 @@
+
 import React, { useState } from 'react';
-import { XMarkIcon } from './icons/HeroIcons';
+import { XMarkIcon, ArrowUpTrayIcon, XCircleIcon } from './icons/HeroIcons';
 
 interface VideoConfigModalProps {
   onClose: () => void;
-  onGenerate: (config: { aspectRatio: '16:9' | '9:16'; resolution: '720p' | '1080p'; customTitle: string; }) => void;
+  onGenerate: (config: {
+    aspectRatio: '16:9' | '9:16';
+    resolution: '720p' | '1080p';
+    customTitle: string;
+    logoBase64: string | null;
+    primaryColor: string;
+    accentColor: string;
+  }) => void;
 }
 
 const VideoConfigModal: React.FC<VideoConfigModalProps> = ({ onClose, onGenerate }) => {
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
   const [resolution, setResolution] = useState<'720p' | '1080p'>('1080p');
   const [customTitle, setCustomTitle] = useState('Unified Technology Ecosystem Pitch');
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [primaryColor, setPrimaryColor] = useState('#667eea');
+  const [accentColor, setAccentColor] = useState('#f5576c');
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoBase64(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleGenerate = () => {
-    onGenerate({ aspectRatio, resolution, customTitle });
+    const cleanLogoBase64 = logoBase64 ? logoBase64.split(',')[1] : null;
+    onGenerate({ aspectRatio, resolution, customTitle, logoBase64: cleanLogoBase64, primaryColor, accentColor });
   };
 
   return (
@@ -71,6 +94,55 @@ const VideoConfigModal: React.FC<VideoConfigModalProps> = ({ onClose, onGenerate
                   {res}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+        
+        {/* Branding Section */}
+        <div className="space-y-6 mt-6 pt-6 border-t border-gray-700">
+          <h3 className="text-lg font-semibold text-white">Branding (Optional)</h3>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Brand Logo</label>
+            {logoBase64 ? (
+              <div className="flex items-center space-x-4">
+                <img src={logoBase64} alt="Logo Preview" className="h-12 w-auto object-contain bg-white rounded-md p-1" />
+                <button
+                  onClick={() => setLogoBase64(null)}
+                  className="text-red-400 hover:text-red-300"
+                  aria-label="Remove logo"
+                  title="Remove logo"
+                >
+                  <XCircleIcon className="h-7 w-7" />
+                </button>
+              </div>
+            ) : (
+              <label
+                htmlFor="logo-upload"
+                className="relative flex justify-center w-full h-24 px-6 pt-5 pb-6 mt-1 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-gray-500 transition-all"
+              >
+                <div className="space-y-1 text-center">
+                  <ArrowUpTrayIcon className="w-10 h-10 mx-auto text-gray-400" />
+                  <p className="text-sm text-gray-400">
+                    Click to upload a logo
+                  </p>
+                </div>
+                <input id="logo-upload" name="logo-upload" type="file" className="sr-only" accept="image/png, image/jpeg, image/svg+xml" onChange={handleFileChange} />
+              </label>
+            )}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Brand Colors</label>
+            <div className="flex items-center space-x-4">
+                <div className="flex-1">
+                    <label htmlFor="primary-color" className="block text-xs text-gray-400">Primary</label>
+                    <input id="primary-color" type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="w-full h-10 p-0 bg-transparent border-none rounded-md cursor-pointer" />
+                </div>
+                <div className="flex-1">
+                    <label htmlFor="accent-color" className="block text-xs text-gray-400">Accent</label>
+                    <input id="accent-color" type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="w-full h-10 p-0 bg-transparent border-none rounded-md cursor-pointer" />
+                </div>
             </div>
           </div>
         </div>
