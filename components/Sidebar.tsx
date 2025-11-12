@@ -26,23 +26,23 @@ const Sidebar: React.FC<SidebarProps> = ({ slides, currentSlideIndex, onSelectSl
             <p className="text-sm text-gray-400 mt-1">Unified Technology Ecosystem</p>
         </div>
         <nav className="flex-1 px-2 py-4 space-y-1">
-          {slides.map((slide) => (
+          {slides.map((slide, index) => (
             <a
               key={slide.id}
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                onSelectSlide(slide.id);
+                onSelectSlide(index);
                 setIsOpen(false);
               }}
               className={`flex items-start rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                currentSlideIndex === slide.id
+                currentSlideIndex === index
                   ? 'bg-gray-900 text-white'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
-              <span className={`w-10 flex-shrink-0 font-bold ${currentSlideIndex === slide.id ? 'text-[#9476ea]' : 'text-gray-500'}`}>
-                {`#${slide.id + 1}`}
+              <span className={`w-10 flex-shrink-0 font-bold ${currentSlideIndex === index ? 'text-[#9476ea]' : 'text-gray-500'}`}>
+                {`#${index + 1}`}
               </span>
               <span>{slide.title}</span>
             </a>

@@ -49,6 +49,7 @@ declare global {
   }
 
   interface Window {
-    aistudio: AIStudio;
+    // FIX: Made the 'aistudio' property optional to resolve a TypeScript declaration conflict.
+    aistudio?: AIStudio;
   }
 }

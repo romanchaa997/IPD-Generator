@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { SlideData, TitleContent, TableContent, MarketContent } from '../types';
-import { LockClosedIcon, CpuChipIcon, CubeTransparentIcon } from './icons/HeroIcons';
+import { LockClosedIcon, CpuChipIcon, CubeTransparentIcon, SparklesIcon } from './icons/HeroIcons';
 
 interface SlideProps {
   slideData: SlideData;
   slideNumber: number;
+  onGenerateNotes: () => void;
 }
 
-const Slide: React.FC<SlideProps> = ({ slideData, slideNumber }) => {
+const Slide: React.FC<SlideProps> = ({ slideData, slideNumber, onGenerateNotes }) => {
   const { title, layout, content, speakerNotes } = slideData;
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleGenerateClick = async () => {
+    setIsGenerating(true);
+    try {
+      await onGenerateNotes();
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const renderContent = () => {
     switch (layout) {
@@ -88,8 +99,25 @@ const Slide: React.FC<SlideProps> = ({ slideData, slideNumber }) => {
             {renderContent()}
         </div>
         <div className="w-full max-w-6xl mx-auto bg-gray-800 p-4 rounded-lg shadow-md">
-            <h3 className="font-bold text-sm uppercase text-purple-400 mb-2">Speaker Notes</h3>
-            <p className="text-gray-300 text-sm md:text-base">{speakerNotes}</p>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold text-sm uppercase text-purple-400">Speaker Notes</h3>
+              <button
+                onClick={handleGenerateClick}
+                disabled={isGenerating}
+                className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 disabled:cursor-not-allowed text-white text-xs font-semibold py-1 px-3 rounded-full transition-colors"
+              >
+                {isGenerating ? (
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                ) : (
+                    <SparklesIcon className="h-4 w-4" />
+                )}
+                <span>{isGenerating ? 'Generating...' : 'Generate with AI'}</span>
+              </button>
+            </div>
+            <p className="text-gray-300 text-sm md:text-base min-h-[40px]">{speakerNotes}</p>
         </div>
     </div>
   );
