@@ -7,18 +7,7 @@ import LoadingModal from './components/LoadingModal';
 import VideoPlayerModal from './components/VideoPlayerModal';
 import { ArrowLeftCircleIcon, ArrowRightCircleIcon, SparklesIcon } from './components/icons/HeroIcons';
 
-// This is a global type, but since it's only used here for now, defining it locally.
-// FIX: Define a named interface 'AIStudio' to resolve a global type declaration conflict.
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    aistudio: AIStudio;
-  }
-}
+// Note: The global window.aistudio type is defined in types.ts to prevent declaration conflicts.
 
 const App: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -127,13 +116,29 @@ const App: React.FC = () => {
         throw new Error('Video generation failed to produce a download link.');
       }
     } catch (error: any) {
-      console.error(error);
-      if (error.message.includes('Requested entity was not found')) {
-        setGenerationError('Your API Key is invalid. Please select a valid key to try again.');
+      console.error("Video Generation Error:", error);
+      let userFriendlyMessage = 'An unexpected error occurred during video generation.';
+      const errorMessage = (error.message || '').toLowerCase();
+
+      if (errorMessage.includes('api key not valid') || errorMessage.includes('requested entity was not found')) {
+        userFriendlyMessage = 'Your API Key appears to be invalid. Please select a valid key and ensure it is enabled.';
         setApiKeySelected(false);
+      } else if (errorMessage.includes('billing')) {
+        userFriendlyMessage = 'Video generation failed. Please ensure that billing is enabled for your Google Cloud project.';
+        setApiKeySelected(false);
+      } else if (errorMessage.includes('quota')) {
+        userFriendlyMessage = 'You have exceeded your API quota. Please check your usage limits and try again later.';
+      } else if (errorMessage.includes('safety settings')) {
+        userFriendlyMessage = 'The request was blocked due to safety settings. Please try modifying the content.';
+      } else if (error instanceof TypeError && errorMessage.includes('failed to fetch')) {
+        userFriendlyMessage = 'A network error occurred. Please check your internet connection and try again.';
+      } else if (errorMessage.includes('failed to download video')) {
+        userFriendlyMessage = `There was a problem downloading the video file. Please try again. (${error.message})`;
       } else {
-        setGenerationError(`An error occurred: ${error.message}`);
+        userFriendlyMessage = `An error occurred: ${error.message}`;
       }
+      
+      setGenerationError(userFriendlyMessage);
     } finally {
       setIsGeneratingVideo(false);
       if (statusIntervalRef.current) {

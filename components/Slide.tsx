@@ -1,6 +1,5 @@
 import React from 'react';
 import type { SlideData, TitleContent, TableContent, MarketContent } from '../types';
-// FIX: Removed unused icon imports that were causing errors as they are not exported from HeroIcons.
 import { LockClosedIcon, CpuChipIcon, CubeTransparentIcon } from './icons/HeroIcons';
 
 interface SlideProps {

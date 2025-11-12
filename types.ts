@@ -18,7 +18,7 @@ export interface TitleContent {
 export interface Regulation {
   icon: string;
   regulation: string;
-  impact: string;
+  impact:string;
   deadline: string;
   highlight?: boolean;
 }
@@ -40,4 +40,15 @@ export interface MarketGridItem {
 export interface MarketContent {
   title: string;
   grid: MarketGridItem[];
+}
+
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    aistudio: AIStudio;
+  }
 }
