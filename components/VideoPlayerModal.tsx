@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { XMarkIcon, TwitterIcon, LinkedInIcon } from './icons/HeroIcons';
+import { useFocusTrap } from './useFocusTrap';
 
 interface VideoPlayerModalProps {
   videoUrl: string;
@@ -8,8 +9,20 @@ interface VideoPlayerModalProps {
 }
 
 const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({ videoUrl, thumbnailUrl, onClose }) => {
-  // NOTE: For social sharing to work effectively, the `videoUrl` should be a publicly accessible URL, not a local blob URL.
-  // The implementation below constructs the share links as requested, but true functionality requires hosting the video file.
+  const modalRef = useFocusTrap<HTMLDivElement>(true);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
   const shareText = "Check out this AI-generated pitch deck video summary!";
   const shareTitle = "Unified Technology Ecosystem Pitch Deck";
   const encodedVideoUrl = encodeURIComponent(videoUrl);
@@ -19,7 +32,15 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({ videoUrl, thumbnail
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-4xl relative" onClick={(e) => e.stopPropagation()}>
+      <div 
+        ref={modalRef}
+        className="bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-4xl relative" 
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="video-player-title"
+      >
+        <h2 id="video-player-title" className="sr-only">Generated Video Player</h2>
         <button
           onClick={onClose}
           className="absolute -top-4 -right-4 h-10 w-10 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors z-10"

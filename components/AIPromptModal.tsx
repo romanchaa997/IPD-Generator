@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, WandSparklesIcon } from './icons/HeroIcons';
+import { useFocusTrap } from './useFocusTrap';
 
 interface AIPromptModalProps {
   onClose: () => void;
@@ -8,6 +9,19 @@ interface AIPromptModalProps {
 
 const AIPromptModal: React.FC<AIPromptModalProps> = ({ onClose, onGenerate }) => {
   const [prompt, setPrompt] = useState('');
+  const modalRef = useFocusTrap<HTMLDivElement>(true);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   const handleGenerateClick = () => {
     if (prompt.trim()) {
@@ -17,7 +31,14 @@ const AIPromptModal: React.FC<AIPromptModalProps> = ({ onClose, onGenerate }) =>
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-gray-800 p-8 rounded-2xl text-left max-w-lg w-full shadow-2xl border border-gray-700 relative" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        className="bg-gray-800 p-8 rounded-2xl text-left max-w-lg w-full shadow-2xl border border-gray-700 relative"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-prompt-title"
+      >
         <button
           onClick={onClose}
           className="absolute top-4 right-4 h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
@@ -27,7 +48,7 @@ const AIPromptModal: React.FC<AIPromptModalProps> = ({ onClose, onGenerate }) =>
         </button>
         <div className="flex items-center space-x-3 mb-6">
             <WandSparklesIcon className="h-7 w-7 text-purple-400"/>
-            <h2 className="text-2xl font-bold font-poppins text-white">Create Slides with AI</h2>
+            <h2 id="ai-prompt-title" className="text-2xl font-bold font-poppins text-white">Create Slides with AI</h2>
         </div>
         
         <div className="space-y-4">

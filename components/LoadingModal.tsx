@@ -13,7 +13,14 @@ const LoadingModal: React.FC<LoadingModalProps> = ({ status, progress }) => (
       <h2 className="text-2xl font-bold mt-4 font-poppins text-white">Generating Video...</h2>
       <p className="text-gray-400 mt-2">This can take a few minutes. Please be patient.</p>
       <div className="mt-6 w-full">
-        <p className="text-sm text-gray-300 transition-opacity duration-500 mb-2">{status}</p>
+        <p 
+          className="text-sm text-gray-300 transition-opacity duration-500 mb-2"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {status}
+        </p>
         <div className="w-full bg-gray-700 rounded-full h-2.5">
           <div
             className="bg-purple-600 h-2.5 rounded-full transition-all duration-500 ease-out"

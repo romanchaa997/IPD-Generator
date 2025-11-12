@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XMarkIcon, ArrowUpTrayIcon, XCircleIcon } from './icons/HeroIcons';
+import { useFocusTrap } from './useFocusTrap';
 
 interface VideoConfigModalProps {
   onClose: () => void;
@@ -21,6 +22,19 @@ const VideoConfigModal: React.FC<VideoConfigModalProps> = ({ onClose, onGenerate
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [primaryColor, setPrimaryColor] = useState('#667eea');
   const [accentColor, setAccentColor] = useState('#f5576c');
+  const modalRef = useFocusTrap<HTMLDivElement>(true);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -40,7 +54,14 @@ const VideoConfigModal: React.FC<VideoConfigModalProps> = ({ onClose, onGenerate
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-gray-800 p-8 rounded-2xl text-left max-w-md w-full shadow-2xl border border-gray-700 relative" onClick={(e) => e.stopPropagation()}>
+      <div 
+        ref={modalRef}
+        className="bg-gray-800 p-8 rounded-2xl text-left max-w-md w-full shadow-2xl border border-gray-700 relative" 
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="video-config-title"
+      >
         <button
           onClick={onClose}
           className="absolute top-4 right-4 h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
@@ -48,7 +69,7 @@ const VideoConfigModal: React.FC<VideoConfigModalProps> = ({ onClose, onGenerate
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
-        <h2 className="text-2xl font-bold mb-6 font-poppins text-white">Video Generation Settings</h2>
+        <h2 id="video-config-title" className="text-2xl font-bold mb-6 font-poppins text-white">Video Generation Settings</h2>
 
         <div className="space-y-6">
            <div>
@@ -98,7 +119,6 @@ const VideoConfigModal: React.FC<VideoConfigModalProps> = ({ onClose, onGenerate
           </div>
         </div>
         
-        {/* Branding Section */}
         <div className="space-y-6 mt-6 pt-6 border-t border-gray-700">
           <h3 className="text-lg font-semibold text-white">Branding (Optional)</h3>
           

@@ -4,6 +4,7 @@ import type { SlideData } from '../types';
 import Slide from './Slide';
 import { XMarkIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon } from './icons/HeroIcons';
 import { GoogleGenAI } from '@google/genai';
+import { useFocusTrap } from './useFocusTrap';
 
 interface SlideReviewModalProps {
   slides: SlideData[];
@@ -17,9 +18,22 @@ const SlideReviewModal: React.FC<SlideReviewModalProps> = ({ slides, onAccept, o
   const [editableSlides, setEditableSlides] = useState<SlideData[]>(() => JSON.parse(JSON.stringify(slides)));
   const [suggestions, setSuggestions] = useState<Record<number, string[]>>({});
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const modalRef = useFocusTrap<HTMLDivElement>(true);
   
   // Ref to track which slides have had suggestions fetched
   const suggestionsFetched = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onDiscard();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onDiscard]);
 
   const fetchVisualSuggestions = async (slideIndex: number) => {
     if (!aiRef.current || suggestionsFetched.current.has(slideIndex)) {
@@ -50,7 +64,6 @@ const SlideReviewModal: React.FC<SlideReviewModalProps> = ({ slides, onAccept, o
         }
     } catch (error) {
         console.error("Error generating visual suggestions:", error);
-        // Silently fail, don't show an alert to the user for this non-critical feature
     } finally {
         setIsGeneratingSuggestions(false);
     }
@@ -97,10 +110,17 @@ const SlideReviewModal: React.FC<SlideReviewModalProps> = ({ slides, onAccept, o
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm" onClick={onDiscard}>
-      <div className="bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-7xl h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div 
+        ref={modalRef}
+        className="bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-7xl h-[90vh] flex flex-col" 
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="review-modal-title"
+      >
         <header className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
             <div>
-                <h2 className="text-xl font-bold font-poppins text-white">Review & Refine AI Slides</h2>
+                <h2 id="review-modal-title" className="text-xl font-bold font-poppins text-white">Review & Refine AI Slides</h2>
                 <p className="text-sm text-gray-400">Review the generated slides and accept AI suggestions for visual elements.</p>
             </div>
             <button
